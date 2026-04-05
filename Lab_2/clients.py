@@ -236,21 +236,36 @@ passenger_stats['no_show_rate'] = passenger_stats['no_show_rides'] / passenger_s
 passenger_stats['payment_issue_rate'] = passenger_stats.get('payment_issues', 0) / passenger_stats[
     'rides_count'] if 'payment_issues' in passenger_stats.columns else 0.0
 
-# Нормализация [0,1]
+# Нормализация компонентов
 passenger_stats['rating_norm'] = np.clip(passenger_stats['avg_passenger_rating'] / 5.0, 0, 1)
 passenger_stats['cancel_norm'] = np.clip(1 - passenger_stats['cancellation_rate'], 0, 1)
 passenger_stats['payment_norm'] = np.clip(1 - passenger_stats['payment_issue_rate'], 0, 1)
 
+# Логарифмическая нормализация
+MAX_RIDES_FOR_NORM = 100  # граница
+passenger_stats['rides_norm'] = np.clip(
+    np.log1p(passenger_stats['rides_count']) / np.log1p(MAX_RIDES_FOR_NORM),
+    0, 1
+)
+
 # Коэффициент доверия
-N_MIN = 50
+N_MIN = 15
 passenger_stats['trust_coef'] = np.minimum(1.0, passenger_stats['rides_count'] / N_MIN)
 
 # Взвешенный скоринг
-WEIGHTS_PASSENGER = {'rating': 0.40, 'cancellation': 0.40, 'payment': 0.20}
+WEIGHTS_PASSENGER = {
+    'rating': 0.25,
+    'cancellation': 0.25,
+    'payment': 0.10,
+    'rides_count': 0.40
+}
+
+# Взвешенная сумма компонентов
 passenger_stats['score_0_1'] = (
-        WEIGHTS_PASSENGER['rating'] * passenger_stats['rating_norm'] +
-        WEIGHTS_PASSENGER['cancellation'] * passenger_stats['cancel_norm'] +
-        WEIGHTS_PASSENGER['payment'] * passenger_stats['payment_norm']
+    WEIGHTS_PASSENGER['rating'] * passenger_stats['rating_norm'] +
+    WEIGHTS_PASSENGER['cancellation'] * passenger_stats['cancel_norm'] +
+    WEIGHTS_PASSENGER['payment'] * passenger_stats['payment_norm'] +
+    WEIGHTS_PASSENGER['rides_count'] * passenger_stats['rides_norm']
 )
 
 # Итоговый рейтинг [0, 5]
